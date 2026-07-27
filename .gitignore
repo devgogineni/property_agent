@@ -1,0 +1,16 @@
+.env
+# Python / uv
+.eaenv/
+.venv
+__pycache__/
+_init__.py
+*.pyc
+.prompt
+
+# Raw datasets, embedding model, durable stores (generated/downloaded, not source)
+data/
+models/
+*.db
+*.db-wal
+*.db-shm
+*.pkl

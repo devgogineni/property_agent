@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Prompt History - Deeds not words</title>
+<style>
+  html, body { height: 100%; margin: 0; }
+  body {
+    font-family: Vandana, sans-serif;
+    background: #fff44f;
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 1rem;
+    box-sizing: border-box;
+  }
+  h1 { font-size: 1.25rem; margin: 0 0 0.25rem; }
+  nav { margin-bottom: 0.75rem; font-size: 0.9rem; }
+  nav a { color: #333; }
+  .summary { font-size: 0.85rem; color: #444; margin-bottom: 0.75rem; }
+  table { width: 100%; border-collapse: collapse; background: #fff; font-size: 0.85rem; }
+  th, td { border: 1px solid #ccc; padding: 0.4rem 0.5rem; text-align: left; vertical-align: top; }
+  th { background: #f0f0f0; }
+  td.question { max-width: 320px; white-space: pre-wrap; }
+  td.num { text-align: right; white-space: nowrap; }
+  .loading, .empty { font-size: 0.9rem; color: #666; }
+  tr.prompt-row { cursor: pointer; }
+  tr.prompt-row:hover { background: #fafada; }
+  tr.calls-row td { background: #fcfcf5; padding: 0.5rem; }
+  table.calls { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+  table.calls th, table.calls td { border: 1px solid #ddd; padding: 0.3rem 0.4rem; }
+  table.calls td.text { max-width: 260px; white-space: pre-wrap; }
+  .calls-loading { font-size: 0.8rem; color: #666; }
+  .relevance-badge { display: inline-block; padding: 0.1rem 0.5rem; font-size: 0.7rem; border-radius: 1rem; cursor: help; white-space: nowrap; }
+  .relevance-badge.RELEVANT { background: #d4edda; color: #1e5f2b; }
+  .relevance-badge.PARTLY_RELEVANT { background: #fff3cd; color: #7a5c00; }
+  .relevance-badge.NON_RELEVANT { background: #f8d7da; color: #7a1f27; }
+</style>
+</head>
+<body>
+<nav><a href="/">&larr; Back to chat</a></nav>
+<h1>Prompt History</h1>
+<div class="summary" id="summary"></div>
+<div id="content" class="loading">Loading...</div>
+
+<script>
+const content = document.getElementById('content');
+const summary = document.getElementById('summary');
+
+function esc(text) {
+  const div = document.createElement('div');
+  div.textContent = text ?? '';
+  return div.innerHTML;
+}
+
+function relevanceBadge(relevance, explanation) {
+  if (!relevance) return '';
+  return `<span class="relevance-badge ${esc(relevance)}" title="${esc(explanation || '')}">${esc(relevance.replace('_', ' '))}</span>`;
+}
+
+async function load() {
+  try {
+    const res = await fetch('/api/prompt-logs');
+    const rows = await res.json();
+    if (!res.ok) throw new Error(rows.detail || 'Request failed');
+
+    if (rows.length === 0) {
+      content.className = 'empty';
+      content.textContent = 'No prompts logged yet.';
+      return;
+    }
+
+    const totalCost = rows.reduce((sum, r) => sum + r.cost_usd, 0);
+    const totalTokens = rows.reduce((sum, r) => sum + r.total_tokens, 0);
+    summary.textContent = `${rows.length} prompt(s) · ${totalTokens.toLocaleString()} total tokens · $${totalCost.toFixed(5)} total cost · click a row for per-call metrics`;
+
+    const table = document.createElement('table');
+    table.innerHTML = `
+      <thead>
+        <tr>
+          <th>Time (UTC)</th>
+          <th>Prompt</th>
+          <th>Model</th>
+          <th>Input tokens</th>
+          <th>Output tokens</th>
+          <th>Total tokens</th>
+          <th>Cost (USD)</th>
+          <th>Feedback</th>
+          <th>Judge relevance</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rows.map(r => `
+          <tr class="prompt-row" data-id="${r.id}">
+            <td>${esc(r.created_at)}</td>
+            <td class="question">${esc(r.question)}</td>
+            <td>${esc(r.model)}</td>
+            <td class="num">${r.input_tokens.toLocaleString()}</td>
+            <td class="num">${r.output_tokens.toLocaleString()}</td>
+            <td class="num">${r.total_tokens.toLocaleString()}</td>
+            <td class="num">$${r.cost_usd.toFixed(5)}</td>
+            <td class="num">${r.feedback_positive ? '👍' + r.feedback_positive + ' ' : ''}${r.feedback_negative ? '👎' + r.feedback_negative : ''}</td>
+            <td>${relevanceBadge(r.judge_relevance, r.judge_explanation)}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    `;
+    content.className = '';
+    content.replaceChildren(table);
+
+    table.querySelectorAll('tr.prompt-row').forEach(row => {
+      row.addEventListener('click', () => toggleCallDetails(row));
+    });
+  } catch (err) {
+    content.className = 'empty';
+    content.textContent = 'Error: ' + err.message;
+  }
+}
+
+function renderCalls(calls) {
+  if (calls.length === 0) return '<div class="calls-loading">No per-call metrics recorded.</div>';
+  return `
+    <table class="calls">
+      <thead>
+        <tr>
+          <th>Call type</th>
+          <th>Model</th>
+          <th>Prompt</th>
+          <th>Response time (s)</th>
+          <th>Prompt tokens</th>
+          <th>Completion tokens</th>
+          <th>Cost (USD)</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${calls.map(c => `
+          <tr>
+            <td>${esc(c.call_type)}</td>
+            <td>${esc(c.model)}</td>
+            <td class="text">${esc(c.prompt)}</td>
+            <td>${c.response_time_s.toFixed(2)}</td>
+            <td>${c.prompt_tokens.toLocaleString()}</td>
+            <td>${c.completion_tokens.toLocaleString()}</td>
+            <td>$${c.cost_usd.toFixed(5)}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  `;
+}
+
+async function toggleCallDetails(row) {
+  const next = row.nextElementSibling;
+  if (next && next.classList.contains('calls-row')) {
+    next.remove();
+    return;
+  }
+
+  const detailRow = document.createElement('tr');
+  detailRow.className = 'calls-row';
+  const cell = document.createElement('td');
+  cell.colSpan = 9;
+  cell.className = 'calls-loading';
+  cell.textContent = 'Loading per-call metrics...';
+  detailRow.appendChild(cell);
+  row.after(detailRow);
+
+  try {
+    const res = await fetch(`/api/llm-call-metrics?request_id=${encodeURIComponent(row.dataset.id)}`);
+    const calls = await res.json();
+    if (!res.ok) throw new Error(calls.detail || 'Request failed');
+    cell.className = '';
+    cell.innerHTML = renderCalls(calls);
+  } catch (err) {
+    cell.className = 'calls-loading';
+    cell.textContent = 'Error: ' + err.message;
+  }
+}
+
+load();
+</script>
+</body>
+</html>

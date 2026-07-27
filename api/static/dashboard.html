@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Estate Agent Dashboard - Deeds not words</title>
+<style>
+  html, body { height: 100%; margin: 0; }
+  body {
+    font-family: Vandana, sans-serif;
+    background: #fff44f;
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 1rem;
+    box-sizing: border-box;
+  }
+  h1 { font-size: 1.25rem; margin: 0 0 0.75rem; }
+  nav { margin-bottom: 0.75rem; font-size: 0.9rem; }
+  nav a { color: #333; }
+  .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.75rem; }
+  .card { background: #fff; border: 1px solid gray; border-radius: 0.5rem; padding: 1rem; }
+  .card .label { font-size: 0.85rem; color: #555; margin-bottom: 0.35rem; }
+  .card .value { font-size: 1.6rem; font-weight: bold; }
+  .loading, .empty { font-size: 0.9rem; color: #666; }
+  @media (max-width: 480px) { .grid { grid-template-columns: 1fr; } }
+  .feedback-summary { margin-top: 0.75rem; font-size: 0.9rem; color: #444; }
+  h2 { font-size: 1rem; margin: 1.25rem 0 0.5rem; }
+  .chart-card { background: #fff; border: 1px solid gray; border-radius: 0.5rem; padding: 0.75rem 1rem; }
+  .chart-card svg { width: 100%; height: auto; display: block; }
+  .chart-line { fill: none; stroke: #2b6cb0; stroke-width: 2; }
+  .chart-axis-label { font-size: 9px; fill: #666; font-family: Vandana, sans-serif; }
+</style>
+</head>
+<body>
+<nav><a href="/">&larr; Back to chat</a></nav>
+<h1>Estate Agent Dashboard</h1>
+<div id="content" class="loading">Loading...</div>
+<div id="charts"></div>
+
+<script>
+const content = document.getElementById('content');
+const charts = document.getElementById('charts');
+
+function lineChartSvg(points, valueKey, valueFmt) {
+  const width = 640;
+  const height = 180;
+  const padLeft = 46;
+  const padRight = 10;
+  const padTop = 10;
+  const padBottom = 22;
+
+  const values = points.map(p => p[valueKey]);
+  let min = Math.min(...values);
+  let max = Math.max(...values);
+  if (min === max) { min -= 1; max += 1; }
+
+  const plotWidth = width - padLeft - padRight;
+  const plotHeight = height - padTop - padBottom;
+
+  const x = i => points.length === 1
+    ? padLeft
+    : padLeft + (i / (points.length - 1)) * plotWidth;
+  const y = v => padTop + plotHeight - ((v - min) / (max - min)) * plotHeight;
+
+  const linePoints = points.map((p, i) => `${x(i)},${y(p[valueKey])}`).join(' ');
+  const firstTime = points[0].created_at.slice(0, 16).replace('T', ' ');
+  const lastTime = points[points.length - 1].created_at.slice(0, 16).replace('T', ' ');
+
+  return `
+    <svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMidYMid meet">
+      <text class="chart-axis-label" x="4" y="${padTop + 8}">${valueFmt(max)}</text>
+      <text class="chart-axis-label" x="4" y="${padTop + plotHeight}">${valueFmt(min)}</text>
+      <line x1="${padLeft}" y1="${padTop}" x2="${padLeft}" y2="${padTop + plotHeight}" stroke="#ccc" />
+      <line x1="${padLeft}" y1="${padTop + plotHeight}" x2="${width - padRight}" y2="${padTop + plotHeight}" stroke="#ccc" />
+      <polyline class="chart-line" points="${linePoints}" />
+      <text class="chart-axis-label" x="${padLeft}" y="${height - 4}">${firstTime}</text>
+      <text class="chart-axis-label" x="${width - padRight}" y="${height - 4}" text-anchor="end">${lastTime}</text>
+    </svg>
+  `;
+}
+
+function renderCharts(points) {
+  if (points.length < 2) {
+    charts.innerHTML = '<div class="empty">Not enough conversations yet to chart a trend.</div>';
+    return;
+  }
+
+  charts.innerHTML = `
+    <h2>Cost over time (last ${points.length} conversations)</h2>
+    <div class="chart-card">${lineChartSvg(points, 'cost_usd', v => '$' + v.toFixed(4))}</div>
+    <h2>Response time over time (last ${points.length} conversations)</h2>
+    <div class="chart-card">${lineChartSvg(points, 'response_time_s', v => v.toFixed(1) + 's')}</div>
+  `;
+}
+
+async function load() {
+  try {
+    const res = await fetch('/api/dashboard-summary');
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Request failed');
+
+    if (data.total_conversations === 0) {
+      content.className = 'empty';
+      content.textContent = 'No conversations logged yet.';
+      return;
+    }
+
+    const grid = document.createElement('div');
+    grid.className = 'grid';
+    grid.innerHTML = `
+      <div class="card">
+        <div class="label">Total conversations</div>
+        <div class="value">${data.total_conversations.toLocaleString()}</div>
+      </div>
+      <div class="card">
+        <div class="label">Avg response time</div>
+        <div class="value">${data.avg_response_time_s.toFixed(2)}s</div>
+      </div>
+      <div class="card">
+        <div class="label">Total cost</div>
+        <div class="value">$${data.total_cost_usd.toFixed(4)}</div>
+      </div>
+      <div class="card">
+        <div class="label">Avg tokens</div>
+        <div class="value">${Math.round(data.avg_tokens).toLocaleString()}</div>
+      </div>
+    `;
+    content.className = '';
+    content.replaceChildren(grid);
+
+    const feedbackDiv = document.createElement('div');
+    feedbackDiv.className = 'feedback-summary';
+    feedbackDiv.textContent = `👍 ${data.positive_feedback} positive · 👎 ${data.negative_feedback} negative feedback`;
+    content.appendChild(feedbackDiv);
+
+    const relevanceDiv = document.createElement('div');
+    relevanceDiv.className = 'feedback-summary';
+    relevanceDiv.textContent = `LLM judge: 🟢 ${data.relevant_count} relevant · 🟡 ${data.partly_relevant_count} partly relevant · 🔴 ${data.non_relevant_count} non-relevant`;
+    content.appendChild(relevanceDiv);
+
+    const seriesRes = await fetch('/api/dashboard-conversations?limit=100');
+    const points = await seriesRes.json();
+    if (!seriesRes.ok) throw new Error(points.detail || 'Request failed');
+    renderCharts(points);
+  } catch (err) {
+    content.className = 'empty';
+    content.textContent = 'Error: ' + err.message;
+  }
+}
+
+load();
+</script>
+</body>
+</html>
