@@ -1,0 +1,19 @@
+[project]
+name = "property-agent"
+version = "0.1.0"
+description = "Add your description here"
+requires-python = ">=3.12"
+dependencies = [
+    "dotenv>=0.9.9",
+    "fastapi>=0.115.0",
+    "gitsource>=0.0.5",
+    "huggingface-hub>=0.27.0",
+    "minsearch>=0.2.0",
+    "onnxruntime>=1.27.0",
+    "openai>=2.46.0",
+    "pandas>=3.0.3",
+    "pandera>=0.20.0",
+    "tokenizers>=0.23.1",
+    "tqdm>=4.69.0",
+    "uvicorn[standard]>=0.34.0",
+]

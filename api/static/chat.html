@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Deeds not words - Your trusted Property Analyst</title>
+<style>
+  html, body { height: 100%; margin: 0; }
+  body {
+    font-family: Vandana, sans-serif;
+    background: #fff44f;
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 1rem;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+  }
+  h1 { font-size: 1.25rem; flex: none; margin: 0 0 0.75rem; }
+  .disclaimer { flex: none; border: 1px solid red; border-radius: 0.25rem; padding: 0.5rem 0.75rem; margin-bottom: 1rem; font-size: 0.85rem; line-height: 1.3; }
+  #log {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+  }
+  .msg { padding: 0.6rem 0.9rem; border-radius: 0.5rem; white-space: pre-wrap; }
+  .user { background: #e8eefc; align-self: flex-end; }
+  .assistant { background: #f0f0f0; align-self: flex-start; }
+  .meta { font-size: 0.75rem; color: #666; margin-top: 0.25rem; }
+  form { flex: none; display: flex; gap: 0.5rem; padding-top: 0.5rem; align-items: flex-end; }
+  textarea#question { flex: 1; padding: 0.5rem; font-size: 1rem; font-family: Vandana, sans-serif; border: 1px solid gray; border-radius: 0.25rem; resize: vertical; }
+  button { padding: 0.5rem 1rem; font-size: 1rem; font-family: Vandana, sans-serif; }
+  .button-row { flex: none; display: flex; gap: 0.5rem; margin-bottom: 1rem; }
+  .history-btn { display: inline-block; padding: 0.4rem 0.9rem; font-size: 0.85rem; font-family: Vandana, sans-serif; background: #fff; border: 1px solid gray; border-radius: 0.25rem; text-decoration: none; color: inherit; cursor: pointer; }
+  .history-btn:hover { background: #f0f0f0; }
+  .feedback-row { margin-top: 0.4rem; display: flex; gap: 0.4rem; align-items: center; }
+  .feedback-btn { padding: 0.15rem 0.5rem; font-size: 0.85rem; font-family: Vandana, sans-serif; background: #fff; border: 1px solid gray; border-radius: 0.25rem; cursor: pointer; }
+  .feedback-btn:hover { background: #e8eefc; }
+  .feedback-btn.selected { background: #d4edda; border-color: #2e7d32; }
+  .feedback-thanks { font-size: 0.75rem; color: #666; }
+  .relevance-badge { display: inline-block; margin-top: 0.35rem; padding: 0.1rem 0.5rem; font-size: 0.7rem; border-radius: 1rem; cursor: help; }
+  .relevance-badge.RELEVANT { background: #d4edda; color: #1e5f2b; }
+  .relevance-badge.PARTLY_RELEVANT { background: #fff3cd; color: #7a5c00; }
+  .relevance-badge.NON_RELEVANT { background: #f8d7da; color: #7a1f27; }
+</style>
+</head>
+<body>
+<div class="disclaimer">
+  <strong>Legal Disclaimer</strong><br>
+  This agent is for learning and demonstration purposes only, not a real
+  property advice. The underlying sales data is for educational use and
+  must not be used for commercial purposes.
+</div>
+<div class="button-row">
+  <a class="history-btn" href="/dashboard">Summary Dashboard</a>
+  <a class="history-btn" href="/prompts">View prompt history &rarr;</a>
+</div>
+<h1> Deeds not words - Your trusted Property Analyst </h1>
+<div id="log"></div>
+<form id="chat-form">
+  <textarea id="question" rows="4" placeholder="e.g. what are the recent 10 property sale transactions on Warren Road ORPINGTON ?" autocomplete="off" required></textarea>
+  <button type="submit">Ask</button>
+</form>
+
+<script>
+const log = document.getElementById('log');
+const form = document.getElementById('chat-form');
+const input = document.getElementById('question');
+
+function addMessage(role, text, meta) {
+  const div = document.createElement('div');
+  div.className = 'msg ' + role;
+  div.textContent = text;
+  if (meta) {
+    const metaDiv = document.createElement('div');
+    metaDiv.className = 'meta';
+    metaDiv.textContent = meta;
+    div.appendChild(metaDiv);
+  }
+  log.appendChild(div);
+  div.scrollIntoView();
+  return div;
+}
+
+function addFeedbackRow(container, requestId) {
+  const row = document.createElement('div');
+  row.className = 'feedback-row';
+
+  const up = document.createElement('button');
+  up.type = 'button';
+  up.className = 'feedback-btn';
+  up.textContent = '+1';
+
+  const down = document.createElement('button');
+  down.type = 'button';
+  down.className = 'feedback-btn';
+  down.textContent = '-1';
+
+  async function sendFeedback(score, chosenBtn) {
+    up.disabled = true;
+    down.disabled = true;
+    chosenBtn.classList.add('selected');
+    try {
+      const res = await fetch('/api/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ request_id: requestId, score }),
+      });
+      if (!res.ok) throw new Error('Request failed');
+      const thanks = document.createElement('span');
+      thanks.className = 'feedback-thanks';
+      thanks.textContent = 'Thanks for the feedback!';
+      row.appendChild(thanks);
+    } catch (err) {
+      up.disabled = false;
+      down.disabled = false;
+      chosenBtn.classList.remove('selected');
+    }
+  }
+
+  up.addEventListener('click', () => sendFeedback(1, up));
+  down.addEventListener('click', () => sendFeedback(-1, down));
+
+  row.appendChild(up);
+  row.appendChild(down);
+  container.appendChild(row);
+}
+
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const question = input.value.trim();
+  if (!question) return;
+  addMessage('user', question);
+  input.value = '';
+
+  const placeholder = document.createElement('div');
+  placeholder.className = 'msg assistant';
+  placeholder.textContent = 'Thinking...';
+  log.appendChild(placeholder);
+
+  try {
+    const res = await fetch('/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Request failed');
+    placeholder.textContent = data.answer;
+    const meta = `${data.num_ppd_matches} sale(s), ${data.num_hpi_matches} index row(s) · $${data.total_cost_usd.toFixed(5)}`;
+    const metaDiv = document.createElement('div');
+    metaDiv.className = 'meta';
+    metaDiv.textContent = meta;
+    placeholder.appendChild(metaDiv);
+
+    const badge = document.createElement('div');
+    badge.className = 'relevance-badge ' + data.relevance;
+    badge.textContent = data.relevance.replace('_', ' ');
+    badge.title = data.relevance_explanation;
+    placeholder.appendChild(badge);
+
+    addFeedbackRow(placeholder, data.request_id);
+  } catch (err) {
+    placeholder.textContent = 'Error: ' + err.message;
+  }
+});
+</script>
+</body>
+</html>

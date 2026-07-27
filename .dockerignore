@@ -1,0 +1,23 @@
+# Local envs / secrets - never baked into the image, supplied at runtime
+.env
+.envrc
+
+# Data and model artifacts - huge, gitignored, mounted as volumes instead
+# (see docker-compose.yml) rather than copied into the image
+data/
+models/
+
+# Python / uv
+.venv/
+.eaenv/
+__pycache__/
+*.pyc
+
+# VCS / editor / misc
+.git/
+.github/
+.vscode/
+.claude/
+*.ipynb
+.prompt
+.python-version
