@@ -1,10 +1,14 @@
-# Estate Agent — UK Property RAG Chatbot
+# Proerty  Agent — UK Property RAG Chatbot
 
 A retrieval-augmented chatbot that answers questions about UK properties
 ("what have houses on this street sold for?", "how are prices trending in
 this area?") by grounding OpenAI LLM answers in two real government
 datasets: **Price Paid Data** (individual historical property sales) and the
 **UK House Price Index** (regional price trends).
+
+# Demo
+Click the following link to see a recorded demo of the RAG Property Agent
+https://www.youtube.com/watch?v=hOwqDYyH6GY
 
 ## Architecture
 
