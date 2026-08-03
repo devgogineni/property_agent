@@ -11,6 +11,32 @@ datasets: **Price Paid Data** (individual historical property sales) and the
 Click the following link to see a recorded demo of the RAG Property Agent
 https://www.youtube.com/watch?v=hOwqDYyH6GY
 
+## Tech stack
+
+- **Language / tooling**: Python >= 3.12, managed with [uv](https://docs.astral.sh/uv/)
+  (`pyproject.toml` / `uv.lock`)
+- **LLM**: [OpenAI API](https://platform.openai.com/) (`openai`) — structured-output
+  calls for query extraction, the final grounded answer, and the LLM-as-judge
+  relevance check
+- **API**: [FastAPI](https://fastapi.tiangolo.com/) + [Uvicorn](https://www.uvicorn.org/),
+  serving both JSON endpoints and minimal built-in HTML pages (chat, prompt
+  history, dashboard)
+- **Storage**: [SQLite](https://www.sqlite.org/) — the durable store for
+  ingested PPD/HPI data (`data/estate_agent.db`) and a separate database for
+  prompt/metrics/feedback logging (`data/prompt_log.db`); no external
+  database server
+- **Vector search**: [minsearch](https://github.com/alexeygrigorev/minsearch)
+  `VectorSearch` over embeddings from a local [ONNX Runtime](https://onnxruntime.ai/)
+  MiniLM model (`onnxruntime`, `tokenizers`, `huggingface-hub` for the
+  one-time model download) — used narrowly for fuzzy location-name
+  resolution, not general document retrieval
+- **Data processing / validation**: [pandas](https://pandas.pydata.org/) for
+  CSV ingestion, [pandera](https://pandera.readthedocs.io/) for schema
+  validation
+- **Config/env**: `python-dotenv`
+- **Containerization**: Docker + Docker Compose, with `data/` and `models/`
+  bind-mounted from the host rather than baked into the image
+
 ## Architecture
 
 ```
