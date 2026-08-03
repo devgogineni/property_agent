@@ -8,8 +8,34 @@ datasets: **Price Paid Data** (individual historical property sales) and the
 
 # Demo
 
-Click the following link to see a recorded demo of the RAG Property Agent
+Click the following link to see a recorded demo of the RAG Property Agent \n
 https://www.youtube.com/watch?v=hOwqDYyH6GY
+
+## Tech stack
+
+- **Language / tooling**: Python >= 3.12, managed with [uv](https://docs.astral.sh/uv/)
+  (`pyproject.toml` / `uv.lock`)
+- **LLM**: [OpenAI API](https://platform.openai.com/) (`openai`) — structured-output
+  calls for query extraction, the final grounded answer, and the LLM-as-judge
+  relevance check
+- **API**: [FastAPI](https://fastapi.tiangolo.com/) + [Uvicorn](https://www.uvicorn.org/),
+  serving both JSON endpoints and minimal built-in HTML pages (chat, prompt
+  history, dashboard)
+- **Storage**: [SQLite](https://www.sqlite.org/) — the durable store for
+  ingested PPD/HPI data (`data/estate_agent.db`) and a separate database for
+  prompt/metrics/feedback logging (`data/prompt_log.db`); no external
+  database server
+- **Vector search**: [minsearch](https://github.com/alexeygrigorev/minsearch)
+  `VectorSearch` over embeddings from a local [ONNX Runtime](https://onnxruntime.ai/)
+  MiniLM model (`onnxruntime`, `tokenizers`, `huggingface-hub` for the
+  one-time model download) — used narrowly for fuzzy location-name
+  resolution, not general document retrieval
+- **Data processing / validation**: [pandas](https://pandas.pydata.org/) for
+  CSV ingestion, [pandera](https://pandera.readthedocs.io/) for schema
+  validation
+- **Config/env**: `python-dotenv`
+- **Containerization**: Docker + Docker Compose, with `data/` and `models/`
+  bind-mounted from the host rather than baked into the image
 
 ## Architecture
 
@@ -185,6 +211,30 @@ directory, so no extra path env vars are needed for this to line up.
 
 ## Monitoring & cost tracking
 
+Monitoring is built directly into the app rather than bolted on via an
+external observability stack: every request the agent handles is logged to
+SQLite as it happens, and that same data is served back out through the 
+app's own `/prompts` and `/dashboard` pages — no separate service to run or
+dashboard tool to wire up. The approach follows the
+[llm-zoomcamp monitoring lessons](https://github.com/DataTalksClub/llm-zoomcamp/tree/main/05-monitoring)
+end to end: per-call metrics, user feedback, and an LLM-as-judge relevance
+check are each layered on top of the same logging tables described below,
+and visualized in the running app itself:
+
+- **Prompt history** (`/prompts`) — every question/answer, with feedback
+  counts and the judge verdict; click a row to drill into per-call
+  model/latency/token/cost detail.
+  ![Dashboard](img/prompts.png)
+
+  ![Dashboard](img/prompt_detail.png)
+  <!-- ![Prompt history](docs/images/prompts.png) -->
+
+- **Dashboard** (`/dashboard`) — aggregate KPIs and cost/response-time
+  trend charts over the last 100 conversations.
+
+  ![Dashboard](img/graph_dashboard.png)
+
+
 Every LLM call (entity extraction + final answer) is tracked via
 `utils/evaluation_utils.py`'s usage/cost helpers, reused unchanged by the
 agent (`RAGWithUsage`). `total_cost_usd` in the `/chat` response reflects the
@@ -261,6 +311,7 @@ uv run python -m evaluation.generate_ground_truth --sample-size-per-field 20
 # hit_rate@N / MRR@N
 uv run python -m evaluation.evaluate_location_search
 ```
+  ![Dashboard](img/hit_rate_mrr_metrics.png)
 
 `evaluation/metrics.py` is generic over any `search_function(question,
 field) -> list[dict]`, so it isn't tied to this one index if another search
