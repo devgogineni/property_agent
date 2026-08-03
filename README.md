@@ -311,7 +311,7 @@ uv run python -m evaluation.generate_ground_truth --sample-size-per-field 20
 # hit_rate@N / MRR@N
 uv run python -m evaluation.evaluate_location_search
 ```
-  ![Dashboard](img/![Dashboard](img/hit_rate_mrr_metrics.png)
+  ![Dashboard](img/hit_rate_mrr_metrics.png)
 
 `evaluation/metrics.py` is generic over any `search_function(question,
 field) -> list[dict]`, so it isn't tied to this one index if another search
