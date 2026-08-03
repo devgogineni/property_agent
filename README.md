@@ -8,7 +8,7 @@ datasets: **Price Paid Data** (individual historical property sales) and the
 
 # Demo
 
-Click the following link to see a recorded demo of the RAG Property Agent
+Click the following link to see a recorded demo of the RAG Property Agent \n
 https://www.youtube.com/watch?v=hOwqDYyH6GY
 
 ## Tech stack
@@ -210,6 +210,30 @@ directory, so no extra path env vars are needed for this to line up.
    hitting `GET /health`.
 
 ## Monitoring & cost tracking
+
+Monitoring is built directly into the app rather than bolted on via an
+external observability stack: every request the agent handles is logged to
+SQLite as it happens, and that same data is served back out through the 
+app's own `/prompts` and `/dashboard` pages — no separate service to run or
+dashboard tool to wire up. The approach follows the
+[llm-zoomcamp monitoring lessons](https://github.com/DataTalksClub/llm-zoomcamp/tree/main/05-monitoring)
+end to end: per-call metrics, user feedback, and an LLM-as-judge relevance
+check are each layered on top of the same logging tables described below,
+and visualized in the running app itself:
+
+- **Prompt history** (`/prompts`) — every question/answer, with feedback
+  counts and the judge verdict; click a row to drill into per-call
+  model/latency/token/cost detail.
+  ![Dashboard](img/prompts.png)
+
+  ![Dashboard](img/prompt_detail.png)
+  <!-- ![Prompt history](docs/images/prompts.png) -->
+
+- **Dashboard** (`/dashboard`) — aggregate KPIs and cost/response-time
+  trend charts over the last 100 conversations.
+
+  ![Dashboard](img/graph_dashboard.png)
+
 
 Every LLM call (entity extraction + final answer) is tracked via
 `utils/evaluation_utils.py`'s usage/cost helpers, reused unchanged by the
